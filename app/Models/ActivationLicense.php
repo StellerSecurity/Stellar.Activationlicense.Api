@@ -11,6 +11,6 @@ class ActivationLicense extends Model
     use HasFactory;
     protected $table = "activationlicenses";
 
-    protected $fillable = ['code', 'status', 'type'];
+    protected $fillable = ['code', 'status', 'type', 'subscriptions_days'];
 
 }
