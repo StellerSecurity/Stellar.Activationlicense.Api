@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('activationlicensecontroller')->group(function () {
         Route::controller(ActivationLicenseController::class)->group(function () {
             Route::post('/activate', 'activate');
+            Route::get('/activate', 'activate');
         });
     });
 });
