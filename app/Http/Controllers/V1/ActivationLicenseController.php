@@ -45,7 +45,7 @@ class ActivationLicenseController extends Controller
         }
 
         if($activationLicense->status === Status::INACTIVE->value) {
-            return response()->json(['response_code' => 400, 'response_message' => 'Activation license is not activated.']);
+            return response()->json(['response_code' => 400, 'response_message' => 'Activation license is not activate and cant be used.']);
         }
 
         if($activationLicense->status === Status::ACTIVATED->value) {
