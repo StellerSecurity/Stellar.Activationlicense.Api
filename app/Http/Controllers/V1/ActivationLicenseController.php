@@ -43,7 +43,9 @@ class ActivationLicenseController extends Controller
         $activationLicense->status = Status::ACTIVATED->value;
         $activationLicense->save();
 
-        return response()->json(['response_code' => 200, 'license' => $activationLicense]);
+        $activationLicense->response_code = 200;
+
+        return response()->json($activationLicense);
 
     }
 
