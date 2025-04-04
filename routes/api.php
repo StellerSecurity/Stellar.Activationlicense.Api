@@ -23,4 +23,4 @@ Route::prefix('v1')->group(function () {
             Route::get('/activate', 'activate');
         });
     });
-});
+})->middleware(\Mondago\ApplicationInsights\Middleware\TrackRequest::class);
