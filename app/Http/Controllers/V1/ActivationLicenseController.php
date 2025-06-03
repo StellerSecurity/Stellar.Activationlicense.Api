@@ -14,7 +14,6 @@ class ActivationLicenseController extends Controller
 
     /**
      * The endpoint will return the license, also it will return the plan days.
-     * Once called, the activation code cannot be used anymore.
      * @param Request $request
      * @return JsonResponse
      */
