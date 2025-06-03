@@ -52,8 +52,12 @@ class ActivationLicenseController extends Controller
             return response()->json(['response_code' => 400, 'response_message' => 'Activation license has already been activated.']);
         }
 
-        $activationLicense->status = Status::ACTIVATED->value;
-        $activationLicense->save();
+        $activate = $request->input('activate');
+
+        if($activate == 0 || $activate == null) {
+            $activationLicense->status = Status::ACTIVATED->value;
+            $activationLicense->save();
+        }
 
         return response()->json(['response_code' => 200, 'license' => $activationLicense]);
 
