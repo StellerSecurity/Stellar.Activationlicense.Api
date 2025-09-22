@@ -66,4 +66,52 @@ class ActivationLicenseController extends Controller
 
     }
 
+    /**
+     * The endpoint will return the license, also it will return the plan days.
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function verify(Request $request): JsonResponse
+    {
+
+        $code = $request->input('code');
+        $type = $request->input('type');
+        $activate = $request->input('activate');
+
+        if($type === null) {
+            return response()->json(['response_code' => 400, 'response_message' => 'No type provided']);
+        }
+
+        try {
+            $enumType = Type::from($type);
+        } catch (\ValueError) {
+            return response()->json(['response_code' => 400, 'response_message' => $type . ' is not a valid type']);
+        }
+
+        if($code === null){
+            return response()->json(['response_code' => 400, 'response_message' => 'No code provided']);
+        }
+
+        if($activate === null){
+            return response()->json(['response_code' => 400, 'response_message' => 'Activate is missing']);
+        }
+
+        $activationLicense = ActivationLicense::where([['code', $code], ['type', $enumType->value]])->first();
+
+        if($activationLicense === null){
+            return response()->json(['response_code' => 400, 'response_message' => 'Activation license not found']);
+        }
+
+        if($activationLicense->status === Status::INACTIVE->value) {
+            return response()->json(['response_code' => 400, 'response_message' => 'Activation license is not activate and cant be used.']);
+        }
+
+        if($activationLicense->status === Status::ACTIVATED->value) {
+            return response()->json(['response_code' => 400, 'response_message' => 'Activation license has already been activated.']);
+        }
+
+        return response()->json(['response_code' => 200, 'license' => $activationLicense]);
+
+    }
+
 }
