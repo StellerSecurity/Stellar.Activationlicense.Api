@@ -24,7 +24,6 @@ class ActivationLicenseController extends Controller
         $type = $request->input('type');
         $activate = $request->input('activate');
 
-
         if($type === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No type provided']);
         }
