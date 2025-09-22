@@ -76,7 +76,6 @@ class ActivationLicenseController extends Controller
 
         $code = $request->input('code');
         $type = $request->input('type');
-        $activate = $request->input('activate');
 
         if($type === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No type provided']);
@@ -90,10 +89,6 @@ class ActivationLicenseController extends Controller
 
         if($code === null){
             return response()->json(['response_code' => 400, 'response_message' => 'No code provided']);
-        }
-
-        if($activate === null){
-            return response()->json(['response_code' => 400, 'response_message' => 'Activate is missing']);
         }
 
         $activationLicense = ActivationLicense::where([['code', $code], ['type', $enumType->value]])->first();
