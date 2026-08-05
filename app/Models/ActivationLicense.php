@@ -7,10 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class ActivationLicense extends Model
 {
-
     use HasFactory;
-    protected $table = "activationlicenses";
+
+    protected $table = 'activationlicenses';
 
     protected $fillable = ['code', 'status', 'type', 'subscriptions_days'];
 
+    protected $casts = [
+        'status' => 'integer',
+        'type' => 'integer',
+        'subscriptions_days' => 'integer',
+    ];
 }

@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::prefix('activationlicensecontroller')->group(function () {
         Route::controller(ActivationLicenseController::class)->group(function () {
+            Route::post('/create', 'create')->middleware('basicAuth');
             Route::post('/activate', 'activate');
             Route::post('/verify', 'verify');
             Route::get('/activate', 'activate');

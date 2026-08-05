@@ -3,14 +3,56 @@
 namespace App\Http\Controllers\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\V1\CreateActivationLicenseRequest;
 use App\Models\ActivationLicense;
+use App\Services\ActivationLicenseService;
 use App\Status;
 use App\Type;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class ActivationLicenseController extends Controller
 {
+    public function create(
+        CreateActivationLicenseRequest $request,
+        ActivationLicenseService $activationLicenseService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $type = (int) $validated['type'];
+
+        $customCodeAlreadyExists = isset($validated['code'])
+            && ActivationLicense::where('code', $validated['code'])
+                ->where('type', $type)
+                ->exists();
+
+        if ($customCodeAlreadyExists) {
+            return response()->json([
+                'response_code' => 409,
+                'response_message' => 'An activation license with this code and type already exists.',
+            ], 409);
+        }
+
+        try {
+            $licenses = $activationLicenseService->create($validated);
+        } catch (RuntimeException) {
+            return response()->json([
+                'response_code' => 500,
+                'response_message' => 'The activation license could not be created.',
+            ], 500);
+        }
+
+        return response()->json([
+            'response_code' => 201,
+            'response_message' => $licenses->count() === 1
+                ? 'Activation license created.'
+                : 'Activation licenses created.',
+            'count' => $licenses->count(),
+            'licenses' => $licenses->values(),
+        ], 201, [
+            'Cache-Control' => 'no-store',
+        ]);
+    }
 
     /**
      * The endpoint will return the license, also it will return the plan days.

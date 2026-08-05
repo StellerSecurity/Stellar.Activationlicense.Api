@@ -1,32 +1,47 @@
 <?php
 
 namespace App\Http\Middleware;
+
 use Closure;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
 class BasicAuth
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
-     * @return mixed
-     */
-    public function handle($request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
-        $AUTH_USER = 'admin';
-        $AUTH_PASS = 'admin';
-        header('Cache-Control: no-cache, must-revalidate, max-age=0');
-        $has_supplied_credentials = !(empty($_SERVER['PHP_AUTH_USER']) && empty($_SERVER['PHP_AUTH_PW']));
-        $is_not_authenticated = (
-            !$has_supplied_credentials ||
-            $_SERVER['PHP_AUTH_USER'] != env('API_USERNAME') ||
-            $_SERVER['PHP_AUTH_PW']   != env('API_PASSWORD')
-        );
-        if ($is_not_authenticated) {
-            header('HTTP/1.1 401 Authorization Required');
-            header('WWW-Authenticate: Basic realm="Access denied"');
-            exit;
+        $configuredUsername = config('activation_license.api_username');
+        $configuredPassword = config('activation_license.api_password');
+        $providedUsername = $request->getUser();
+        $providedPassword = $request->getPassword();
+
+        $isConfigured = is_string($configuredUsername)
+            && $configuredUsername !== ''
+            && is_string($configuredPassword)
+            && $configuredPassword !== '';
+
+        $isAuthenticated = $isConfigured
+            && is_string($providedUsername)
+            && is_string($providedPassword)
+            && hash_equals($configuredUsername, $providedUsername)
+            && hash_equals($configuredPassword, $providedPassword);
+
+        if (! $isAuthenticated) {
+            return $this->unauthorizedResponse();
         }
+
         return $next($request);
+    }
+
+    private function unauthorizedResponse(): JsonResponse
+    {
+        return response()->json([
+            'response_code' => 401,
+            'response_message' => 'Unauthorized.',
+        ], 401, [
+            'WWW-Authenticate' => 'Basic realm="Activation License API"',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 }

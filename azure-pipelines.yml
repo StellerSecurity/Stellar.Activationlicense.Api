@@ -38,13 +38,22 @@ stages:
         sudo update-alternatives --set phpdbg /usr/bin/phpdbg$(phpVersion)
         sudo update-alternatives --set php-cgi /usr/bin/php-cgi$(phpVersion)
         sudo update-alternatives --set phar.phar /usr/bin/phar.phar$(phpVersion)
+        if ! php -m | grep -qi '^pdo_sqlite$'; then
+          sudo apt-get update
+          sudo apt-get install -y php$(phpVersion)-sqlite3
+        fi
         php -version
+        php -m | grep -i sqlite
       workingDirectory: $(rootFolder)
       displayName: 'Use PHP version $(phpVersion)'
 
     - script: composer install --no-interaction --prefer-dist --optimize-autoloader
       workingDirectory: $(rootFolder)
       displayName: 'Composer install'
+
+    - script: php artisan test
+      workingDirectory: $(rootFolder)
+      displayName: 'Run tests'
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
