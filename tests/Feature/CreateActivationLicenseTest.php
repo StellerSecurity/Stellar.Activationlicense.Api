@@ -68,6 +68,21 @@ class CreateActivationLicenseTest extends TestCase
         ]);
     }
 
+    public function test_it_generates_a_nine_character_antivirus_code(): void
+    {
+        $response = $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+        ]);
+
+        $response->assertCreated();
+
+        $code = $response->json('licenses.0.code');
+
+        $this->assertMatchesRegularExpression('/^[A-HJ-NP-Z2-9]{9}$/', $code);
+        $this->assertSame(9, strlen($code));
+    }
+
     public function test_it_returns_the_same_license_for_an_idempotent_replay(): void
     {
         $payload = [
@@ -78,6 +93,10 @@ class CreateActivationLicenseTest extends TestCase
 
         $firstResponse = $this->authenticatedPost($payload);
         $firstResponse->assertCreated();
+        $this->assertMatchesRegularExpression(
+            '/^[A-HJ-NP-Z2-9]{9}$/',
+            (string) $firstResponse->json('licenses.0.code')
+        );
 
         $secondResponse = $this->authenticatedPost($payload);
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ActivationLicense;
 use App\Status;
+use App\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -12,6 +13,8 @@ class ActivationLicenseService
 {
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+    private const ANTIVIRUS_CODE_LENGTH = 9;
+
     public function create(array $data): Collection
     {
         $quantity = (int) ($data['quantity'] ?? 1);
@@ -19,6 +22,9 @@ class ActivationLicenseService
         $status = (int) ($data['status'] ?? Status::ACTIVE->value);
         $customCode = $data['code'] ?? null;
         $idempotencyKey = $data['idempotency_key'] ?? null;
+        $useCompactAntivirusCode = $customCode === null
+            && $type === Type::ANTIVIRUS->value
+            && ! array_key_exists('prefix', $data);
         $prefix = $customCode === null
             ? $this->resolvePrefix($data['prefix'] ?? config('activation_license.code_prefix'))
             : 'STELLAR';
@@ -30,12 +36,17 @@ class ActivationLicenseService
             $status,
             $prefix,
             $customCode,
-            $idempotencyKey
+            $idempotencyKey,
+            $useCompactAntivirusCode
         ): Collection {
             $licenses = collect();
 
             for ($index = 0; $index < $quantity; $index++) {
-                $code = $customCode ?? $this->generateUniqueCode($prefix, $type);
+                $code = $customCode ?? $this->generateUniqueCode(
+                    $prefix,
+                    $type,
+                    $useCompactAntivirusCode
+                );
 
                 $licenses->push(ActivationLicense::create([
                     'code' => $code,
@@ -50,16 +61,24 @@ class ActivationLicenseService
         });
     }
 
-    private function generateUniqueCode(string $prefix, int $type): string
+    private function generateUniqueCode(
+        string $prefix,
+        int $type,
+        bool $useCompactAntivirusCode
+    ): string
     {
         for ($attempt = 0; $attempt < 10; $attempt++) {
-            $segments = [];
+            if ($useCompactAntivirusCode) {
+                $code = $this->randomSegment(self::ANTIVIRUS_CODE_LENGTH);
+            } else {
+                $segments = [];
 
-            for ($segment = 0; $segment < 4; $segment++) {
-                $segments[] = $this->randomSegment(4);
+                for ($segment = 0; $segment < 4; $segment++) {
+                    $segments[] = $this->randomSegment(4);
+                }
+
+                $code = $prefix.'-'.implode('-', $segments);
             }
-
-            $code = $prefix.'-'.implode('-', $segments);
 
             if (! ActivationLicense::where('code', $code)->where('type', $type)->exists()) {
                 return $code;
