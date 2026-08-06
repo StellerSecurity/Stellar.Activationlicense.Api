@@ -14,15 +14,24 @@ class ActivationLicenseService
 
     public function create(array $data): Collection
     {
-        $quantity = $data['quantity'] ?? 1;
+        $quantity = (int) ($data['quantity'] ?? 1);
         $type = (int) $data['type'];
         $status = (int) ($data['status'] ?? Status::ACTIVE->value);
         $customCode = $data['code'] ?? null;
+        $idempotencyKey = $data['idempotency_key'] ?? null;
         $prefix = $customCode === null
             ? $this->resolvePrefix($data['prefix'] ?? config('activation_license.code_prefix'))
             : 'STELLAR';
 
-        return DB::transaction(function () use ($data, $quantity, $type, $status, $prefix, $customCode): Collection {
+        return DB::transaction(function () use (
+            $data,
+            $quantity,
+            $type,
+            $status,
+            $prefix,
+            $customCode,
+            $idempotencyKey
+        ): Collection {
             $licenses = collect();
 
             for ($index = 0; $index < $quantity; $index++) {
@@ -33,6 +42,7 @@ class ActivationLicenseService
                     'status' => $status,
                     'type' => $type,
                     'subscriptions_days' => (int) $data['subscriptions_days'],
+                    'idempotency_key' => $idempotencyKey,
                 ]));
             }
 

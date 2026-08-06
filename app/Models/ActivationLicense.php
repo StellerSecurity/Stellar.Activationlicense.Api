@@ -11,7 +11,13 @@ class ActivationLicense extends Model
 
     protected $table = 'activationlicenses';
 
-    protected $fillable = ['code', 'status', 'type', 'subscriptions_days'];
+    protected $fillable = [
+        'code',
+        'status',
+        'type',
+        'subscriptions_days',
+        'idempotency_key',
+    ];
 
     protected $casts = [
         'status' => 'integer',

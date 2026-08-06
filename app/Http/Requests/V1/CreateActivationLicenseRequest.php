@@ -28,12 +28,14 @@ class CreateActivationLicenseRequest extends FormRequest
             }
         }
 
-        if (is_string($this->input('code'))) {
-            $data['code'] = strtoupper(trim($this->input('code')));
+        foreach (['code', 'prefix'] as $field) {
+            if (is_string($this->input($field))) {
+                $data[$field] = strtoupper(trim((string) $this->input($field)));
+            }
         }
 
-        if (is_string($this->input('prefix'))) {
-            $data['prefix'] = strtoupper(trim($this->input('prefix')));
+        if (is_string($this->input('idempotency_key'))) {
+            $data['idempotency_key'] = trim((string) $this->input('idempotency_key'));
         }
 
         $this->merge($data);
@@ -63,14 +65,27 @@ class CreateActivationLicenseRequest extends FormRequest
             ],
             'code' => ['nullable', 'string', 'min:8', 'max:128', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/'],
             'prefix' => ['nullable', 'string', 'min:2', 'max:24', 'regex:/^[A-Z0-9]+$/'],
+            'idempotency_key' => [
+                'nullable',
+                'string',
+                'min:8',
+                'max:191',
+                'regex:/^[A-Za-z0-9._:-]+$/',
+            ],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if ($this->filled('code') && (int) $this->input('quantity', 1) !== 1) {
+            $quantity = (int) $this->input('quantity', 1);
+
+            if ($this->filled('code') && $quantity !== 1) {
                 $validator->errors()->add('quantity', 'Quantity must be 1 when a custom code is provided.');
+            }
+
+            if ($this->filled('idempotency_key') && $quantity !== 1) {
+                $validator->errors()->add('quantity', 'Quantity must be 1 when an idempotency key is provided.');
             }
 
             if ($this->filled('code') && $this->filled('prefix')) {

@@ -21,7 +21,6 @@ class CreateActivationLicenseTest extends TestCase
         config()->set('activation_license.api_password', 'test-password');
         config()->set('activation_license.code_prefix', 'STELLAR');
         config()->set('activation_license.max_batch_size', 100);
-
     }
 
     public function test_creation_requires_basic_authentication(): void
@@ -52,6 +51,7 @@ class CreateActivationLicenseTest extends TestCase
             ->assertHeader('Cache-Control', 'no-store')
             ->assertJsonPath('response_code', 201)
             ->assertJsonPath('count', 1)
+            ->assertJsonPath('idempotent_replay', false)
             ->assertJsonPath('licenses.0.status', Status::ACTIVE->value)
             ->assertJsonPath('licenses.0.type', Type::VPN->value)
             ->assertJsonPath('licenses.0.subscriptions_days', 30);
@@ -66,6 +66,55 @@ class CreateActivationLicenseTest extends TestCase
             'type' => Type::VPN->value,
             'subscriptions_days' => 30,
         ]);
+    }
+
+    public function test_it_returns_the_same_license_for_an_idempotent_replay(): void
+    {
+        $payload = [
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+            'idempotency_key' => 'antivirus:order-123:item-456:unit-1',
+        ];
+
+        $firstResponse = $this->authenticatedPost($payload);
+        $firstResponse->assertCreated();
+
+        $secondResponse = $this->authenticatedPost($payload);
+
+        $secondResponse
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store')
+            ->assertJsonPath('response_code', 200)
+            ->assertJsonPath('idempotent_replay', true)
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('licenses.0.code', $firstResponse->json('licenses.0.code'))
+            ->assertJsonPath('licenses.0.idempotency_key', $payload['idempotency_key']);
+
+        $this->assertSame(1, ActivationLicense::query()->count());
+    }
+
+    public function test_it_rejects_reusing_an_idempotency_key_with_different_days(): void
+    {
+        $idempotencyKey = 'antivirus:order-123:item-456:unit-1';
+
+        $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 30,
+            'idempotency_key' => $idempotencyKey,
+        ])->assertCreated();
+
+        $response = $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        $response
+            ->assertConflict()
+            ->assertExactJson([
+                'response_code' => 409,
+                'response_message' => 'The idempotency key was already used with different subscription days.',
+            ]);
     }
 
     public function test_it_creates_a_batch_of_unique_licenses(): void
@@ -136,6 +185,7 @@ class CreateActivationLicenseTest extends TestCase
             'quantity' => 2,
             'code' => 'CUSTOM-CODE',
             'prefix' => 'VPN',
+            'idempotency_key' => 'invalid key with spaces',
         ]);
 
         $response
@@ -147,7 +197,22 @@ class CreateActivationLicenseTest extends TestCase
                 'status',
                 'quantity',
                 'prefix',
+                'idempotency_key',
             ]);
+    }
+
+    public function test_it_rejects_batch_creation_with_an_idempotency_key(): void
+    {
+        $response = $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+            'quantity' => 2,
+            'idempotency_key' => 'antivirus:order-123:item-456:unit-1',
+        ]);
+
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['quantity']);
     }
 
     private function authenticatedPost(array $payload): TestResponse

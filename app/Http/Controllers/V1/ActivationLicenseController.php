@@ -8,6 +8,7 @@ use App\Models\ActivationLicense;
 use App\Services\ActivationLicenseService;
 use App\Status;
 use App\Type;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -20,6 +21,11 @@ class ActivationLicenseController extends Controller
     ): JsonResponse {
         $validated = $request->validated();
         $type = (int) $validated['type'];
+
+        $idempotentLicense = $this->findIdempotentLicense($validated);
+        if ($idempotentLicense !== null) {
+            return $this->idempotentReplayResponse($idempotentLicense, $validated);
+        }
 
         $customCodeAlreadyExists = isset($validated['code'])
             && ActivationLicense::where('code', $validated['code'])
@@ -35,11 +41,20 @@ class ActivationLicenseController extends Controller
 
         try {
             $licenses = $activationLicenseService->create($validated);
-        } catch (RuntimeException) {
-            return response()->json([
-                'response_code' => 500,
-                'response_message' => 'The activation license could not be created.',
-            ], 500);
+        } catch (QueryException $exception) {
+            $idempotentLicense = $this->findIdempotentLicense($validated);
+
+            if ($idempotentLicense !== null) {
+                return $this->idempotentReplayResponse($idempotentLicense, $validated);
+            }
+
+            report($exception);
+
+            return $this->creationFailedResponse();
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return $this->creationFailedResponse();
         }
 
         return response()->json([
@@ -48,6 +63,7 @@ class ActivationLicenseController extends Controller
                 ? 'Activation license created.'
                 : 'Activation licenses created.',
             'count' => $licenses->count(),
+            'idempotent_replay' => false,
             'licenses' => $licenses->values(),
         ], 201, [
             'Cache-Control' => 'no-store',
@@ -55,100 +71,156 @@ class ActivationLicenseController extends Controller
     }
 
     /**
-     * The endpoint will return the license, also it will return the plan days.
-     * @param Request $request
-     * @return JsonResponse
+     * The endpoint returns the license and its subscription duration.
      */
     public function activate(Request $request): JsonResponse
     {
-
         $code = $request->input('code');
         $type = $request->input('type');
         $activate = $request->input('activate');
 
-        if($type === null) {
+        if ($type === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No type provided']);
         }
 
         try {
             $enumType = Type::from($type);
         } catch (\ValueError) {
-            return response()->json(['response_code' => 400, 'response_message' => $type . ' is not a valid type']);
+            return response()->json(['response_code' => 400, 'response_message' => $type.' is not a valid type']);
         }
 
-        if($code === null){
+        if ($code === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No code provided']);
         }
 
-        if($activate === null){
+        if ($activate === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'Activate is missing']);
         }
 
+        $activationLicense = ActivationLicense::where([
+            ['code', $code],
+            ['type', $enumType->value],
+        ])->first();
 
-        $activationLicense = ActivationLicense::where([['code', $code], ['type', $enumType->value]])->first();
-
-        if($activationLicense === null){
+        if ($activationLicense === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'Activation license not found']);
         }
 
-        if($activationLicense->status === Status::INACTIVE->value) {
-            return response()->json(['response_code' => 400, 'response_message' => 'Activation license is not activate and cant be used.']);
+        if ($activationLicense->status === Status::INACTIVE->value) {
+            return response()->json([
+                'response_code' => 400,
+                'response_message' => 'Activation license is not active and cannot be used.',
+            ]);
         }
 
-        if($activationLicense->status === Status::ACTIVATED->value) {
-            return response()->json(['response_code' => 400, 'response_message' => 'Activation license has already been activated.']);
+        if ($activationLicense->status === Status::ACTIVATED->value) {
+            return response()->json([
+                'response_code' => 400,
+                'response_message' => 'Activation license has already been activated.',
+            ]);
         }
 
-        if($activate == 1) {
+        if ((int) $activate === 1) {
             $activationLicense->status = Status::ACTIVATED->value;
             $activationLicense->save();
         }
 
         return response()->json(['response_code' => 200, 'license' => $activationLicense]);
-
     }
 
     /**
-     * The endpoint will return the license, also it will return the plan days.
-     * @param Request $request
-     * @return JsonResponse
+     * The endpoint verifies the license and returns its subscription duration.
      */
     public function verify(Request $request): JsonResponse
     {
-
         $code = $request->input('code');
         $type = $request->input('type');
 
-        if($type === null) {
+        if ($type === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No type provided']);
         }
 
         try {
             $enumType = Type::from($type);
         } catch (\ValueError) {
-            return response()->json(['response_code' => 400, 'response_message' => $type . ' is not a valid type']);
+            return response()->json(['response_code' => 400, 'response_message' => $type.' is not a valid type']);
         }
 
-        if($code === null){
+        if ($code === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'No code provided']);
         }
 
-        $activationLicense = ActivationLicense::where([['code', $code], ['type', $enumType->value]])->first();
+        $activationLicense = ActivationLicense::where([
+            ['code', $code],
+            ['type', $enumType->value],
+        ])->first();
 
-        if($activationLicense === null){
+        if ($activationLicense === null) {
             return response()->json(['response_code' => 400, 'response_message' => 'Activation license not found']);
         }
 
-        if($activationLicense->status === Status::INACTIVE->value) {
-            return response()->json(['response_code' => 400, 'response_message' => 'Activation license is not activate and cant be used.']);
+        if ($activationLicense->status === Status::INACTIVE->value) {
+            return response()->json([
+                'response_code' => 400,
+                'response_message' => 'Activation license is not active and cannot be used.',
+            ]);
         }
 
-        if($activationLicense->status === Status::ACTIVATED->value) {
-            return response()->json(['response_code' => 400, 'response_message' => 'Activation license has already been activated.']);
+        if ($activationLicense->status === Status::ACTIVATED->value) {
+            return response()->json([
+                'response_code' => 400,
+                'response_message' => 'Activation license has already been activated.',
+            ]);
         }
 
         return response()->json(['response_code' => 200, 'license' => $activationLicense]);
-
     }
 
+    private function findIdempotentLicense(array $validated): ?ActivationLicense
+    {
+        $idempotencyKey = $validated['idempotency_key'] ?? null;
+
+        if (! is_string($idempotencyKey) || $idempotencyKey === '') {
+            return null;
+        }
+
+        return ActivationLicense::query()
+            ->where('type', (int) $validated['type'])
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+    }
+
+    private function idempotentReplayResponse(
+        ActivationLicense $license,
+        array $validated
+    ): JsonResponse {
+        if ((int) $license->subscriptions_days !== (int) $validated['subscriptions_days']) {
+            return response()->json([
+                'response_code' => 409,
+                'response_message' => 'The idempotency key was already used with different subscription days.',
+            ], 409, [
+                'Cache-Control' => 'no-store',
+            ]);
+        }
+
+        return response()->json([
+            'response_code' => 200,
+            'response_message' => 'Existing activation license returned.',
+            'count' => 1,
+            'idempotent_replay' => true,
+            'licenses' => [$license],
+        ], 200, [
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    private function creationFailedResponse(): JsonResponse
+    {
+        return response()->json([
+            'response_code' => 500,
+            'response_message' => 'The activation license could not be created.',
+        ], 500, [
+            'Cache-Control' => 'no-store',
+        ]);
+    }
 }
