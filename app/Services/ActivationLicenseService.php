@@ -13,7 +13,7 @@ class ActivationLicenseService
 {
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    private const ANTIVIRUS_CODE_LENGTH = 9;
+    private const COMPACT_CODE_LENGTH = 9;
 
     public function create(array $data): Collection
     {
@@ -22,8 +22,8 @@ class ActivationLicenseService
         $status = (int) ($data['status'] ?? Status::ACTIVE->value);
         $customCode = $data['code'] ?? null;
         $idempotencyKey = $data['idempotency_key'] ?? null;
-        $useCompactAntivirusCode = $customCode === null
-            && $type === Type::ANTIVIRUS->value
+        $useCompactCode = $customCode === null
+            && in_array($type, [Type::ANTIVIRUS->value, Type::VPN->value], true)
             && ! array_key_exists('prefix', $data);
         $prefix = $customCode === null
             ? $this->resolvePrefix($data['prefix'] ?? config('activation_license.code_prefix'))
@@ -37,7 +37,7 @@ class ActivationLicenseService
             $prefix,
             $customCode,
             $idempotencyKey,
-            $useCompactAntivirusCode
+            $useCompactCode
         ): Collection {
             $licenses = collect();
 
@@ -45,7 +45,7 @@ class ActivationLicenseService
                 $code = $customCode ?? $this->generateUniqueCode(
                     $prefix,
                     $type,
-                    $useCompactAntivirusCode
+                    $useCompactCode
                 );
 
                 $licenses->push(ActivationLicense::create([
@@ -65,12 +65,12 @@ class ActivationLicenseService
     private function generateUniqueCode(
         string $prefix,
         int $type,
-        bool $useCompactAntivirusCode
+        bool $useCompactCode
     ): string
     {
         for ($attempt = 0; $attempt < 10; $attempt++) {
-            if ($useCompactAntivirusCode) {
-                $code = $this->randomSegment(self::ANTIVIRUS_CODE_LENGTH);
+            if ($useCompactCode) {
+                $code = $this->randomSegment(self::COMPACT_CODE_LENGTH);
             } else {
                 $segments = [];
 
