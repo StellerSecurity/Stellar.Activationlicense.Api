@@ -17,11 +17,13 @@ class ActivationLicense extends Model
         'type',
         'subscriptions_days',
         'idempotency_key',
+        'reseller_user_id',
     ];
 
     protected $casts = [
         'status' => 'integer',
         'type' => 'integer',
         'subscriptions_days' => 'integer',
+        'reseller_user_id' => 'integer',
     ];
 }
