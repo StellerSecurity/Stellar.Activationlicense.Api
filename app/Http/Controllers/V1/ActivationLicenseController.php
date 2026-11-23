@@ -203,6 +203,22 @@ class ActivationLicenseController extends Controller
             ]);
         }
 
+        $existingResellerId = $license->reseller_user_id === null
+            ? null
+            : (int) $license->reseller_user_id;
+        $requestedResellerId = isset($validated['reseller_user_id'])
+            ? (int) $validated['reseller_user_id']
+            : null;
+
+        if ($existingResellerId !== $requestedResellerId) {
+            return response()->json([
+                'response_code' => 409,
+                'response_message' => 'The idempotency key was already used for another reseller.',
+            ], 409, [
+                'Cache-Control' => 'no-store',
+            ]);
+        }
+
         return response()->json([
             'response_code' => 200,
             'response_message' => 'Existing activation license returned.',

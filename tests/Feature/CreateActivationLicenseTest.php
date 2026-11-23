@@ -83,6 +83,24 @@ class CreateActivationLicenseTest extends TestCase
         $this->assertSame(9, strlen($code));
     }
 
+    public function test_it_assigns_generated_licenses_to_a_reseller(): void
+    {
+        $response = $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 30,
+            'quantity' => 2,
+            'reseller_user_id' => 42,
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('count', 2)
+            ->assertJsonPath('licenses.0.reseller_user_id', 42)
+            ->assertJsonPath('licenses.1.reseller_user_id', 42);
+
+        $this->assertSame(2, ActivationLicense::query()->where('reseller_user_id', 42)->count());
+    }
+
     public function test_it_returns_the_same_license_for_an_idempotent_replay(): void
     {
         $payload = [
@@ -134,6 +152,28 @@ class CreateActivationLicenseTest extends TestCase
                 'response_code' => 409,
                 'response_message' => 'The idempotency key was already used with different subscription days.',
             ]);
+    }
+
+    public function test_it_rejects_reusing_an_idempotency_key_for_another_reseller(): void
+    {
+        $idempotencyKey = 'antivirus:order-123:item-456:unit-2';
+
+        $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+            'reseller_user_id' => 42,
+            'idempotency_key' => $idempotencyKey,
+        ])->assertCreated();
+
+        $this->authenticatedPost([
+            'type' => Type::ANTIVIRUS->value,
+            'subscriptions_days' => 365,
+            'reseller_user_id' => 43,
+            'idempotency_key' => $idempotencyKey,
+        ])->assertConflict()->assertExactJson([
+            'response_code' => 409,
+            'response_message' => 'The idempotency key was already used for another reseller.',
+        ]);
     }
 
     public function test_it_creates_a_batch_of_unique_licenses(): void
@@ -204,6 +244,7 @@ class CreateActivationLicenseTest extends TestCase
             'quantity' => 2,
             'code' => 'CUSTOM-CODE',
             'prefix' => 'VPN',
+            'reseller_user_id' => 0,
             'idempotency_key' => 'invalid key with spaces',
         ]);
 
@@ -216,6 +257,7 @@ class CreateActivationLicenseTest extends TestCase
                 'status',
                 'quantity',
                 'prefix',
+                'reseller_user_id',
                 'idempotency_key',
             ]);
     }

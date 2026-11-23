@@ -54,6 +54,7 @@ class ActivationLicenseService
                     'type' => $type,
                     'subscriptions_days' => (int) $data['subscriptions_days'],
                     'idempotency_key' => $idempotencyKey,
+                    'reseller_user_id' => $data['reseller_user_id'] ?? null,
                 ]));
             }
 

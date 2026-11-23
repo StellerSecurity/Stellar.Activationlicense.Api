@@ -20,7 +20,7 @@ class CreateActivationLicenseRequest extends FormRequest
     {
         $data = [];
 
-        foreach (['type', 'status', 'subscriptions_days', 'quantity'] as $field) {
+        foreach (['type', 'status', 'subscriptions_days', 'quantity', 'reseller_user_id'] as $field) {
             $value = $this->input($field);
 
             if (is_string($value) && filter_var($value, FILTER_VALIDATE_INT) !== false) {
@@ -63,6 +63,7 @@ class CreateActivationLicenseRequest extends FormRequest
                 'min:1',
                 'max:'.$maxBatchSize,
             ],
+            'reseller_user_id' => ['nullable', 'integer', 'min:1'],
             'code' => ['nullable', 'string', 'min:8', 'max:128', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/'],
             'prefix' => ['nullable', 'string', 'min:2', 'max:24', 'regex:/^[A-Z0-9]+$/'],
             'idempotency_key' => [

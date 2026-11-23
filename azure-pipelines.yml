@@ -51,6 +51,10 @@ stages:
       workingDirectory: $(rootFolder)
       displayName: 'Composer install'
 
+    - script: php artisan test
+      workingDirectory: $(rootFolder)
+      displayName: 'Run application tests'
+
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
