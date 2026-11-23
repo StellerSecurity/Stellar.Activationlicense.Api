@@ -58,7 +58,8 @@ class CreateActivationLicenseTest extends TestCase
 
         $code = $response->json('licenses.0.code');
 
-        $this->assertMatchesRegularExpression('/^STELLAR-[A-HJ-NP-Z2-9]{4}(?:-[A-HJ-NP-Z2-9]{4}){3}$/', $code);
+        $this->assertMatchesRegularExpression('/^[A-HJ-NP-Z2-9]{9}$/', $code);
+        $this->assertSame(9, strlen($code));
 
         $this->assertDatabaseHas('activationlicenses', [
             'code' => $code,
